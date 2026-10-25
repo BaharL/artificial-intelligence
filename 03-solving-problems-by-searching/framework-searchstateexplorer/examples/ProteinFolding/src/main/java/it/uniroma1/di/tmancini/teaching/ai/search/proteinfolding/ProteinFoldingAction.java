@@ -11,12 +11,7 @@ public class ProteinFoldingAction extends Action {
     private int y;
     private char c;
 
-    public ProteinFoldingAction(
-            ProteinFoldingState state,
-            int x,
-            int y,
-            char c) {
-
+    public ProteinFoldingAction(ProteinFoldingState state, int x, int y, char c) {
         this.state = state;
         this.x = x;
         this.y = y;
@@ -26,10 +21,8 @@ public class ProteinFoldingAction extends Action {
     @Override
     public double getCost() {
 
-        /*
-         * A P aminoacid cannot create H-H contacts.
-         */
-        if (c != 'H') {
+        // P cannot create H-H contacts
+        if (c == 'P') {
             return 3;
         }
 
@@ -47,18 +40,11 @@ public class ProteinFoldingAction extends Action {
             int nx = x + d[0];
             int ny = y + d[1];
 
-            /*
-             * Skip positions outside the valid protein grid.
-             */
             if (!state.inBounds(nx, ny)) {
                 continue;
             }
 
-            /*
-             * The previous aminoacid is sequentially connected
-             * to the new one, therefore it must not count as
-             * a contact.
-             */
+            // Previous aminoacid is sequential, so it is not a contact
             if (nx == state.getX() && ny == state.getY()) {
                 continue;
             }
@@ -68,19 +54,23 @@ public class ProteinFoldingAction extends Action {
             }
         }
 
+        /*
+         * More contacts -> lower cost.
+         * Maximum possible new contacts is 3.
+         */
         return 3 - newContacts;
     }
 
     public int getX() {
-        return this.x;
+        return x;
     }
 
     public int getY() {
-        return this.y;
+        return y;
     }
 
     public char getAminoacid() {
-        return this.c;
+        return c;
     }
 
     @Override
@@ -96,10 +86,10 @@ public class ProteinFoldingAction extends Action {
 
         ProteinFoldingAction other = (ProteinFoldingAction) oo;
 
-        return this.x == other.x
-                && this.y == other.y
-                && this.c == other.c
-                && Objects.equals(this.state, other.state);
+        return x == other.x
+                && y == other.y
+                && c == other.c
+                && Objects.equals(state, other.state);
     }
 
     @Override
@@ -109,11 +99,7 @@ public class ProteinFoldingAction extends Action {
 
     @Override
     public ProteinFoldingAction clone() {
-        try {
-            return (ProteinFoldingAction) super.clone();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        return new ProteinFoldingAction(state, x, y, c);
     }
 
     @Override

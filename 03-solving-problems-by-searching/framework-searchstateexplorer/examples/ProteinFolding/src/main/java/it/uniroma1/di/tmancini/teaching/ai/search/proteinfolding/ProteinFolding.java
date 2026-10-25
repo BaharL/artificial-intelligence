@@ -3,156 +3,260 @@ package it.uniroma1.di.tmancini.teaching.ai.search.proteinfolding;
 import it.uniroma1.di.tmancini.teaching.ai.search.*;
 import picocli.CommandLine;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-public class ProteinFolding extends Problem implements Callable<Integer> {
-    @CommandLine.Option(names={"--size"},required = true,
-            description = "The size of the protein, as a positive integer number.")
+public class ProteinFolding
+        extends Problem
+        implements Callable<Integer> {
+
+    @CommandLine.Option(
+            names = {"--size"},
+            required = true,
+            description = "The size of the protein.")
     private int size;
 
-
-    @CommandLine.Option(names={"--algos", "--algorithms"}, required = true, split=",",
-            description = "The algorithms to use, as a double quoted comma-separated list. Valid values are" +
-                    "{BFS, DFS, MINCOST,}")
+    @CommandLine.Option(
+            names = {"--algos", "--algorithms"},
+            required = true,
+            split = ",",
+            description = "Algorithms: MINCOST, BFG, A*")
     private String[] algos;
 
-    @CommandLine.Option(names={"--protein"})
+    @CommandLine.Option(
+            names = {"--protein"},
+            required = true,
+            description = "Protein sequence containing H and P.")
     private String protein;
 
-    @CommandLine.Option(names={"-v", "--verbosity"}, defaultValue = "0",
-            description = "The verbosity level of the output, as a positive integer number. " +
-                    "0 corresponds to 'standard', while higher numbers correspond to higher verbosity.")
+    @CommandLine.Option(
+            names = {"-v", "--verbosity"},
+            defaultValue = "0",
+            description = "Verbosity level from 0 to 3.")
     private int vlevel;
-
-
-
 
     public ProteinFolding() {
         super("ProteinFolding");
     }
 
-    private void checkInput() throws IllegalArgumentException{
-        List<String> algorithms = Arrays.asList(
-                "bfs",
-                "dfs",
-                "mincost");
-        for (String algoHeur : this.algos) {
-            List<String> algoAndHeuristics = getAlgorithmAndHeuristics(algoHeur);
-            String algo = algoAndHeuristics.get(0);
-            if (!algorithms.contains(algo.toLowerCase())){
+    private void checkInput() {
+
+        List<String> algorithms =
+                Arrays.asList(
+                        "mincost",
+                        "bfg",
+                        "a*");
+
+        for (String algo : algos) {
+
+            String current =
+                    algo.trim().toLowerCase();
+
+            if (!algorithms.contains(current)) {
+
                 throw new IllegalArgumentException(
-                        String.format("[ERROR] Algorithm '%s' is unknown. Please specify one of " +
-                                "{'BFS', 'DFS', 'MINCOST'}", algo));
-            }
-            if (algoAndHeuristics.size() > 1) {
-                System.err.println("[WARNING] Heuristics are not yet supported for this problem!%n");
+                        "[ERROR] Unknown algorithm: "
+                                + algo);
             }
         }
 
-        if (this.size <= 0) {
+        if (protein == null || protein.isEmpty()) {
+
             throw new IllegalArgumentException(
-                    "[ERROR] Negative or null puzzle sizes are not allowed. Please a positive value for option '--size'");
-        }
-        if (this.vlevel < 0) {
-            throw new IllegalArgumentException(
-                    "[ERROR] Negative verbosity levels are not allowed. Please a non-negative value for option '--verbosity'");
+                    "[ERROR] Protein cannot be empty.");
         }
 
+        protein = protein.toUpperCase();
 
+        for (char c : protein.toCharArray()) {
+
+            if (c != 'H' && c != 'P') {
+
+                throw new IllegalArgumentException(
+                        "[ERROR] Protein can contain only H and P.");
+            }
+        }
+
+        if (size != protein.length()) {
+
+            throw new IllegalArgumentException(
+                    "[ERROR] Size must be equal to protein length.");
+        }
+
+        if (vlevel < 0 || vlevel > 3) {
+
+            throw new IllegalArgumentException(
+                    "[ERROR] Verbosity must be between 0 and 3.");
+        }
     }
-
 
     @Override
     public Integer call() {
+
         try {
-            this.checkInput();
-            ProteinFoldingState initialState = ProteinFoldingState.newInitialState(this);
-            System.out.println("Random initial state:\n" + initialState);
 
+            checkInput();
 
-            SearchStateExplorer explorer;
+            ProteinFoldingState initialState =
+                    ProteinFoldingState
+                            .newInitialState(this);
+
+            System.out.println(
+                    "Initial state:\n"
+                            + initialState);
+
             for (String algo : algos) {
-                List<String> algoAndSetting = getAlgorithmAndHeuristics(algo);
-                String algorithm = algoAndSetting.get(0);
-                String setting = null;
-                if (algoAndSetting.size() > 1) setting = algoAndSetting.get(1);
+
+                String algorithm =
+                        algo.trim().toLowerCase();
+
+                SearchStateExplorer explorer;
 
                 switch (algorithm) {
-                    case "bfs":
-                        explorer = new BFSExplorer(this);
-                        break;
-                    case "dfs":
-                        explorer = new DFSExplorer(this);
-                        break;
+
                     case "mincost":
-                        explorer = new MinCostExplorer(this);
+                        explorer =
+                                new MinCostExplorer(this);
                         break;
+
+                    case "bfg":
+                        explorer =
+                                new BestFirstGreedyExplorer(this);
+                        break;
+
+                    case "a*":
+                        explorer =
+                                new AstarExplorer(this);
+                        break;
+
                     default:
-                        throw new IllegalStateException("[ERROR] Unknown algorithm: " + algorithm);
+                        throw new IllegalStateException(
+                                "Unknown algorithm");
                 }
 
+                explorer.setVerbosity(
+                        SearchStateExplorer
+                                .VERBOSITY
+                                .values()[vlevel]);
 
-                explorer.setVerbosity(SearchStateExplorer.VERBOSITY.values()[vlevel]);
+                System.out.println(
+                        "\n========================");
 
-                System.out.println("\n\n\n===================\n\nAlgorithm " + explorer +
-                        (setting != null ? " (" + setting + ")" : "") + " started");
-                List<Action> result = explorer.run(initialState);
+                System.out.println(
+                        "Algorithm "
+                                + explorer
+                                + " started");
 
-                System.out.println("[INFO] Algorithm " + explorer + " terminated.");
+                /*
+                 * Continue also after finding a goal,
+                 * so the best complete folding is kept.
+                 */
+                List<Action> result =
+                        explorer.run(initialState, true);
+
+                System.out.println(
+                        "Algorithm "
+                                + explorer
+                                + " terminated.");
+
                 explorer.outputStats();
 
-                System.out.println("Initial state:\n" + initialState);
-                if (result != null) {
-                    System.out.println("\n\n\nSolution found by algorithm " + explorer + " (" + result.size() + " actions):\n");
-                    int i = 0;
-                    for (Action a : result) {
-                        System.out.println(" [" + i + "]" + a);
-                        i++;
-                    }
-                } else System.out.printf("\n\n\nNo solution found by algorithm %s%n", explorer);
+                printSolution(
+                        initialState,
+                        result);
             }
+
             return 0;
-        } catch (IllegalArgumentException e){
+
+        } catch (IllegalArgumentException e) {
+
             System.err.println(e.getMessage());
             return 1;
-        } catch (IllegalStateException e){
+
+        } catch (IllegalStateException e) {
+
             System.err.println(e.getMessage());
             return 2;
         }
     }
 
-    private List<String> getAlgorithmAndHeuristics(String algo){
-        List<String> algoAndSetting = Arrays.asList(algo.split(":"));
-        List<String> result = new ArrayList<>();
-        result.add(algoAndSetting.get(0).trim().toLowerCase());
-        if (algoAndSetting.size() > 1) result.add(algoAndSetting.get(1).trim());
-        return result;
+    private void printSolution(
+            ProteinFoldingState initialState,
+            List<Action> actions) {
+
+        if (actions == null) {
+
+            System.out.println("No solution found.");
+            return;
+        }
+
+        ProteinFoldingState state =
+                initialState;
+
+        double totalCost = 0;
+
+        System.out.println("\nSolution:");
+
+        int i = 0;
+
+        for (Action action : actions) {
+
+            System.out.println(
+                    "[" + i + "] "
+                            + action
+                            + " cost="
+                            + action.getCost());
+
+            totalCost += action.getCost();
+
+            state =
+                    (ProteinFoldingState)
+                            state.resultingState(action);
+
+            i++;
+        }
+
+        System.out.println(
+                "\nFinal state:\n"
+                        + state);
+
+        System.out.println(
+                "Total cost = "
+                        + totalCost);
     }
 
     public char[] getProtein() {
-        return this.protein.toCharArray();
+        return protein.toCharArray();
     }
 
-    public int getSize(){
-        return this.size;
+    public int getSize() {
+        return size;
     }
 
-    private static void printOutputHeader(){
-        System.out.println("\n======================================================"+
-                "=\n=\t\tSearchStateExplorer\t\t      =\n" +
-                "=\t\t  Exercise: Protein Folding\t\t      =\n" +
-                "= Computer Science Dept - Sapienza University of Rome =\n" +
-                "=======================================================\n");
+    private static void printOutputHeader() {
+
+        System.out.println(
+                "\n============================================"
+                        + "\nProtein Folding - SearchStateExplorer"
+                        + "\n============================================");
     }
 
     public static void main(String[] args) {
-        printOutputHeader();
-        int exitCode = new CommandLine(new ProteinFolding()).execute(args);
 
-        System.out.printf("%nExecution completed. Exiting %s errors.%n", exitCode > 0 ? "with" : "without");
+        printOutputHeader();
+
+        int exitCode =
+                new CommandLine(
+                        new ProteinFolding())
+                        .execute(args);
+
+        System.out.printf(
+                "%nExecution completed. Exiting %s errors.%n",
+                exitCode > 0
+                        ? "with"
+                        : "without");
+
         System.exit(exitCode);
     }
 }
