@@ -1,4 +1,3 @@
-```markdown
 # HP 2D Protein Folding
 
 Implementation of the HP 2D Protein Folding exercise using the
